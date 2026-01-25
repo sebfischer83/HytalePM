@@ -19,12 +19,12 @@ public class ModVersionChecker
     {
         var results = new List<ModCheckResult>();
 
-        var jarFiles = await AnsiConsole.Status()
+        var modFiles = await AnsiConsole.Status()
             .Spinner(Spinner.Known.Dots)
-            .StartAsync($"[yellow]Scanning directory for .jar files...[/]", async ctx =>
+            .StartAsync($"[yellow]Scanning directory for mod files (.jar, .zip)...[/]", async ctx =>
             {
-                var files = await fileSystem.ListJarFilesAsync(modsDirectory);
-                ctx.Status($"[green]Found {files.Count} jar files in {modsDirectory}[/]");
+                var files = await fileSystem.ListModFilesAsync(modsDirectory);
+                ctx.Status($"[green]Found {files.Count} mod files in {modsDirectory}[/]");
                 await Task.Delay(300);
                 return files;
             });
@@ -74,7 +74,7 @@ public class ModVersionChecker
                             continue;
                         }
 
-                        var localModFile = jarFiles.FirstOrDefault(f => 
+                        var localModFile = modFiles.FirstOrDefault(f => 
                             fileSystem.GetFileName(f).Contains(mod.Name, StringComparison.OrdinalIgnoreCase));
 
                         var result = new ModCheckResult
@@ -124,6 +124,93 @@ public class ModVersionChecker
 
         return results;
     }
+
+    public async Task<List<ModUpdateResult>> UpdateModsAsync(
+        string modsDirectory, 
+        IFileSystemAccess fileSystem, 
+        List<ModCheckResult> modsToUpdate)
+    {
+        var updateResults = new List<ModUpdateResult>();
+
+        if (!fileSystem.IsLocal)
+        {
+            AnsiConsole.MarkupLine("[yellow]Warning:[/] Automatic updates are only supported for local file systems.");
+            return updateResults;
+        }
+
+        var backupDir = Path.Combine(modsDirectory, _config.BackupDirectory);
+
+        await AnsiConsole.Progress()
+            .AutoClear(false)
+            .Columns(
+                new TaskDescriptionColumn(),
+                new ProgressBarColumn(),
+                new PercentageColumn(),
+                new SpinnerColumn())
+            .StartAsync(async ctx =>
+            {
+                var task = ctx.AddTask("[cyan]Updating mods[/]", maxValue: modsToUpdate.Count);
+
+                foreach (var mod in modsToUpdate)
+                {
+                    task.Description = $"[cyan]Updating:[/] {mod.ModName}";
+                    var result = new ModUpdateResult { ModName = mod.ModName };
+
+                    try
+                    {
+                        // Find the local file
+                        var modFiles = await fileSystem.ListModFilesAsync(modsDirectory);
+                        var localFile = modFiles.FirstOrDefault(f => 
+                            fileSystem.GetFileName(f).Contains(mod.ModName, StringComparison.OrdinalIgnoreCase));
+
+                        if (localFile != null)
+                        {
+                            // Create backup
+                            var backupPath = await fileSystem.CreateBackupAsync(localFile, backupDir);
+                            result.BackupPath = backupPath;
+                            result.OldFile = Path.GetFileName(localFile);
+
+                            // Delete old file
+                            File.Delete(localFile);
+                        }
+
+                        // Download new file
+                        if (!string.IsNullOrEmpty(mod.DownloadUrl))
+                        {
+                            var newFileName = mod.LatestVersion ?? $"{mod.ModName}.jar";
+                            // Ensure proper extension
+                            if (!newFileName.EndsWith(".jar", StringComparison.OrdinalIgnoreCase) &&
+                                !newFileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                            {
+                                newFileName += ".jar";
+                            }
+
+                            var destinationPath = Path.Combine(modsDirectory, newFileName);
+                            await fileSystem.DownloadFileAsync(mod.DownloadUrl, destinationPath);
+                            
+                            result.NewFile = newFileName;
+                            result.Success = true;
+                            result.Message = "Successfully updated";
+                        }
+                        else
+                        {
+                            result.Success = false;
+                            result.Message = "No download URL available";
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        result.Success = false;
+                        result.Message = $"Error: {ex.Message}";
+                    }
+
+                    updateResults.Add(result);
+                    task.Increment(1);
+                }
+            });
+
+        return updateResults;
+    }
 }
 
 public class ModCheckResult
@@ -135,4 +222,14 @@ public class ModCheckResult
     public DateTimeOffset? LatestFileDate { get; set; }
     public string? DownloadUrl { get; set; }
     public string? LocalFile { get; set; }
+}
+
+public class ModUpdateResult
+{
+    public string ModName { get; set; } = string.Empty;
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public string? OldFile { get; set; }
+    public string? NewFile { get; set; }
+    public string? BackupPath { get; set; }
 }

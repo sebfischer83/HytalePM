@@ -5,6 +5,8 @@ public class ModConfig
     public string CurseForgeApiKey { get; set; } = string.Empty;
     public List<ModInfo> Mods { get; set; } = new();
     public SshConfig? Ssh { get; set; }
+    public string BackupDirectory { get; set; } = "backups";
+    public bool AutoUpdate { get; set; } = false;
 }
 
 public class ModInfo

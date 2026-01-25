@@ -6,11 +6,15 @@ A .NET 10 console application for checking mod versions against CurseForge.
 
 - Beautiful terminal UI with colors, tables, and progress indicators (powered by Spectre.Console)
 - Reads configuration from a JSON file containing mod list and CurseForge API token
-- Scans a specified directory for installed mods (.jar files)
+- Scans a specified directory for installed mods (**.jar and .zip files**)
 - **Supports both local and remote (SSH/SFTP) directory access**
 - Checks if mod versions are up to date using the CurseForge API
 - Reports which mods need updates with download links
 - Real-time progress tracking during mod checks
+- **Automatic mod updates with backup functionality** (local only)
+  - Creates timestamped backups before updating
+  - Interactive or automatic update mode
+  - Detailed update results with old/new file tracking
 
 ## Prerequisites
 
@@ -24,6 +28,8 @@ Create a `config.json` file with the following structure:
 ```json
 {
   "CurseForgeApiKey": "your-curseforge-api-key-here",
+  "BackupDirectory": "backups",
+  "AutoUpdate": false,
   "Mods": [
     {
       "Name": "jei",
@@ -47,9 +53,17 @@ Create a `config.json` file with the following structure:
 }
 ```
 
-**Note:** The `Ssh` section is optional. If omitted, the application will access the local file system. For SSH authentication, provide either:
-- `Password` for password-based authentication
-- `PrivateKeyPath` (and optionally `PrivateKeyPassphrase`) for key-based authentication
+### Configuration Options
+
+- **CurseForgeApiKey** (required): Your CurseForge API key
+- **BackupDirectory** (optional): Directory for mod backups, relative to mods directory (default: "backups")
+- **AutoUpdate** (optional): Automatically update mods without prompting (default: false)
+- **Mods** (required): List of mods to track
+  - **Name**: Mod identifier (used to match local files)
+  - **CurseForgeUrl**: URL to the mod on CurseForge
+  - **ProjectId**: CurseForge project ID
+- **Ssh** (optional): SSH configuration for remote access
+  - Provide either **Password** or **PrivateKeyPath** for authentication
 
 ### Finding Project IDs
 

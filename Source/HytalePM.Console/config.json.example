@@ -1,5 +1,7 @@
 {
   "CurseForgeApiKey": "your-curseforge-api-key-here",
+  "BackupDirectory": "backups",
+  "AutoUpdate": false,
   "Mods": [
     {
       "Name": "jei",

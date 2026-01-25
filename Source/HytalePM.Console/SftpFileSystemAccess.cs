@@ -8,6 +8,8 @@ public class SftpFileSystemAccess : IFileSystemAccess
     private readonly SftpClient _sftpClient;
     private bool _disposed;
 
+    public bool IsLocal => false;
+
     public SftpFileSystemAccess(string host, int port, string username, string password)
     {
         _sftpClient = new SftpClient(host, port, username, password);
@@ -24,7 +26,7 @@ public class SftpFileSystemAccess : IFileSystemAccess
         _sftpClient.Connect();
     }
 
-    public Task<List<string>> ListJarFilesAsync(string directory)
+    public Task<List<string>> ListModFilesAsync(string directory)
     {
         if (!_sftpClient.IsConnected)
         {
@@ -37,7 +39,9 @@ public class SftpFileSystemAccess : IFileSystemAccess
         }
 
         var files = _sftpClient.ListDirectory(directory)
-            .Where(f => f.IsRegularFile && f.Name.EndsWith(".jar", StringComparison.OrdinalIgnoreCase))
+            .Where(f => f.IsRegularFile && 
+                       (f.Name.EndsWith(".jar", StringComparison.OrdinalIgnoreCase) ||
+                        f.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)))
             .Select(f => f.FullName)
             .ToList();
 
@@ -49,6 +53,16 @@ public class SftpFileSystemAccess : IFileSystemAccess
         // Handle both Unix and Windows paths by using the last segment after '/' or '\'
         var lastSlash = Math.Max(path.LastIndexOf('/'), path.LastIndexOf('\\'));
         return lastSlash >= 0 ? path.Substring(lastSlash + 1) : path;
+    }
+
+    public Task<string> CreateBackupAsync(string sourceFile, string backupDirectory)
+    {
+        throw new NotSupportedException("Backup is not supported for remote SFTP file systems");
+    }
+
+    public Task DownloadFileAsync(string url, string destinationPath)
+    {
+        throw new NotSupportedException("Download is not supported for remote SFTP file systems");
     }
 
     public void Dispose()

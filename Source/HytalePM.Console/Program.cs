@@ -42,6 +42,8 @@ if (!File.Exists(configFile))
     var examplePanel = new Panel(new Markup(
         "[dim]{\n" +
         "  \"CurseForgeApiKey\": \"your-api-key-here\",\n" +
+        "  \"BackupDirectory\": \"backups\",\n" +
+        "  \"AutoUpdate\": false,\n" +
         "  \"Mods\": [\n" +
         "    {\n" +
         "      \"Name\": \"ModName\",\n" +
@@ -253,6 +255,81 @@ try
             BorderStyle = new Style(Color.Yellow)
         };
         AnsiConsole.Write(updatesPanel);
+
+        // Offer to update if auto-update is enabled or ask user
+        if (fileSystem.IsLocal)
+        {
+            bool shouldUpdate = config.AutoUpdate;
+            
+            if (!config.AutoUpdate)
+            {
+                AnsiConsole.WriteLine();
+                shouldUpdate = AnsiConsole.Confirm("[yellow]Do you want to update these mods now?[/]", false);
+            }
+
+            if (shouldUpdate)
+            {
+                AnsiConsole.WriteLine();
+                AnsiConsole.MarkupLine($"[cyan]Backup directory:[/] {Path.Combine(modsDirectory, config.BackupDirectory)}");
+                AnsiConsole.WriteLine();
+
+                var modsToUpdate = results.Where(r => r.Status == "Update available").ToList();
+                var updateResults = await checker.UpdateModsAsync(modsDirectory, fileSystem, modsToUpdate);
+
+                AnsiConsole.WriteLine();
+
+                // Display update results
+                var updateTable = new Table()
+                    .Border(TableBorder.Rounded)
+                    .BorderColor(Color.Grey)
+                    .AddColumn(new TableColumn("[bold]Mod[/]").Centered())
+                    .AddColumn(new TableColumn("[bold]Status[/]").Centered())
+                    .AddColumn(new TableColumn("[bold]Old File[/]"))
+                    .AddColumn(new TableColumn("[bold]New File[/]"))
+                    .AddColumn(new TableColumn("[bold]Backup[/]"));
+
+                foreach (var result in updateResults)
+                {
+                    string statusMarkup = result.Success 
+                        ? "[green]✓ Success[/]" 
+                        : $"[red]✗ Failed[/]\n[dim]{result.Message}[/]";
+
+                    updateTable.AddRow(
+                        result.ModName,
+                        statusMarkup,
+                        result.OldFile ?? "[dim]N/A[/]",
+                        result.NewFile ?? "[dim]N/A[/]",
+                        result.BackupPath != null ? Path.GetFileName(result.BackupPath) : "[dim]N/A[/]"
+                    );
+                }
+
+                var updatePanel = new Panel(updateTable)
+                {
+                    Header = new PanelHeader("[bold green]Update Results[/]"),
+                    Border = BoxBorder.Rounded,
+                    BorderStyle = new Style(Color.Green)
+                };
+                AnsiConsole.Write(updatePanel);
+
+                var successCount = updateResults.Count(r => r.Success);
+                var failCount = updateResults.Count(r => !r.Success);
+                
+                AnsiConsole.WriteLine();
+                if (successCount > 0)
+                {
+                    AnsiConsole.MarkupLine($"[green]✓ Successfully updated {successCount} mod(s)[/]");
+                }
+                if (failCount > 0)
+                {
+                    AnsiConsole.MarkupLine($"[red]✗ Failed to update {failCount} mod(s)[/]");
+                }
+            }
+        }
+        else
+        {
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine("[yellow]Note:[/] Automatic updates are only available for local file systems.");
+        }
     }
 
     return 0;

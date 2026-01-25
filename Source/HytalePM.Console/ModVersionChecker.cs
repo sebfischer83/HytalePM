@@ -14,17 +14,12 @@ public class ModVersionChecker
         _config = config;
     }
 
-    public async Task<List<ModCheckResult>> CheckModsInDirectory(string modsDirectory)
+    public async Task<List<ModCheckResult>> CheckModsInDirectory(string modsDirectory, IFileSystemAccess fileSystem)
     {
         var results = new List<ModCheckResult>();
-        
-        if (!Directory.Exists(modsDirectory))
-        {
-            throw new DirectoryNotFoundException($"Mods directory not found: {modsDirectory}");
-        }
 
-        var jarFiles = Directory.GetFiles(modsDirectory, "*.jar", SearchOption.TopDirectoryOnly);
-        System.Console.WriteLine($"Found {jarFiles.Length} jar files in {modsDirectory}");
+        var jarFiles = await fileSystem.ListJarFilesAsync(modsDirectory);
+        System.Console.WriteLine($"Found {jarFiles.Count} jar files in {modsDirectory}");
 
         foreach (var mod in _config.Mods)
         {
@@ -59,7 +54,7 @@ public class ModVersionChecker
                 }
 
                 var localModFile = jarFiles.FirstOrDefault(f => 
-                    Path.GetFileName(f).Contains(mod.Name, StringComparison.OrdinalIgnoreCase));
+                    fileSystem.GetFileName(f).Contains(mod.Name, StringComparison.OrdinalIgnoreCase));
 
                 var result = new ModCheckResult
                 {
@@ -68,7 +63,7 @@ public class ModVersionChecker
                     LatestVersion = latestFile.DisplayName ?? latestFile.FileName,
                     LatestFileDate = latestFile.FileDate,
                     DownloadUrl = latestFile.DownloadUrl,
-                    LocalFile = localModFile != null ? Path.GetFileName(localModFile) : null
+                    LocalFile = localModFile != null ? fileSystem.GetFileName(localModFile) : null
                 };
 
                 if (localModFile != null)

@@ -11,5 +11,13 @@
       "CurseForgeUrl": "https://www.curseforge.com/minecraft/mc-mods/journeymap",
       "ProjectId": 32274
     }
-  ]
+  ],
+  "Ssh": {
+    "Host": "your-server.com",
+    "Port": 22,
+    "Username": "your-username",
+    "Password": "your-password",
+    "PrivateKeyPath": "/path/to/private/key",
+    "PrivateKeyPassphrase": "key-passphrase-if-needed"
+  }
 }

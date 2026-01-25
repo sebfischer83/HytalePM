@@ -1,25 +1,32 @@
 ﻿using Microsoft.Extensions.Configuration;
 using HytalePM.Console;
+using Spectre.Console;
 
 // Parse command line arguments
 if (args.Length < 1)
 {
-    Console.WriteLine("HytalePM.Console - Mod Version Checker for CurseForge");
-    Console.WriteLine("Usage: HytalePM.Console <mods-directory> [config-file]");
-    Console.WriteLine();
-    Console.WriteLine("Arguments:");
-    Console.WriteLine("  <mods-directory>  Path to the directory containing mod .jar files");
-    Console.WriteLine("                    Can be a local path or remote path when using SSH");
-    Console.WriteLine("  [config-file]     Optional path to config file (default: config.json)");
-    Console.WriteLine();
-    Console.WriteLine("Example:");
-    Console.WriteLine("  HytalePM.Console ./mods");
-    Console.WriteLine("  HytalePM.Console /var/minecraft/mods custom-config.json");
-    Console.WriteLine();
-    Console.WriteLine("SSH Support:");
-    Console.WriteLine("  Configure SSH settings in the config file to access remote directories.");
-    Console.WriteLine("  When SSH is configured, the mods-directory path is interpreted as a");
-    Console.WriteLine("  path on the remote server.");
+    AnsiConsole.Write(new FigletText("HytalePM").Color(Color.Cyan1));
+    AnsiConsole.MarkupLine("[cyan]Mod Version Checker for CurseForge[/]");
+    AnsiConsole.WriteLine();
+    
+    var panel = new Panel(new Markup(
+        "[yellow]Usage:[/] HytalePM.Console <mods-directory> [[config-file]]\n\n" +
+        "[yellow]Arguments:[/]\n" +
+        "  [green]<mods-directory>[/]  Path to the directory containing mod .jar files\n" +
+        "                     Can be a local path or remote path when using SSH\n" +
+        "  [green][[config-file]][/]     Optional path to config file (default: config.json)\n\n" +
+        "[yellow]Example:[/]\n" +
+        "  HytalePM.Console ./mods\n" +
+        "  HytalePM.Console /var/minecraft/mods custom-config.json\n\n" +
+        "[yellow]SSH Support:[/]\n" +
+        "  Configure SSH settings in the config file to access remote directories.\n" +
+        "  When SSH is configured, the mods-directory path is interpreted as a\n" +
+        "  path on the remote server."))
+    {
+        Header = new PanelHeader("[bold]Help[/]"),
+        Border = BoxBorder.Rounded
+    };
+    AnsiConsole.Write(panel);
     return 1;
 }
 
@@ -29,27 +36,33 @@ string configFile = args.Length > 1 ? args[1] : "config.json";
 // Check if config file exists
 if (!File.Exists(configFile))
 {
-    Console.WriteLine($"Error: Config file not found: {configFile}");
-    Console.WriteLine();
-    Console.WriteLine("Please create a config.json file with the following structure:");
-    Console.WriteLine(@"{
-  ""CurseForgeApiKey"": ""your-api-key-here"",
-  ""Mods"": [
+    AnsiConsole.MarkupLine($"[red]Error:[/] Config file not found: [yellow]{configFile}[/]");
+    AnsiConsole.WriteLine();
+    
+    var examplePanel = new Panel(new Markup(
+        "[dim]{\n" +
+        "  \"CurseForgeApiKey\": \"your-api-key-here\",\n" +
+        "  \"Mods\": [\n" +
+        "    {\n" +
+        "      \"Name\": \"ModName\",\n" +
+        "      \"CurseForgeUrl\": \"https://www.curseforge.com/minecraft/mc-mods/mod-slug\",\n" +
+        "      \"ProjectId\": 12345\n" +
+        "    }\n" +
+        "  ],\n" +
+        "  \"Ssh\": {\n" +
+        "    \"Host\": \"example.com\",\n" +
+        "    \"Port\": 22,\n" +
+        "    \"Username\": \"user\",\n" +
+        "    \"Password\": \"password\",\n" +
+        "    \"PrivateKeyPath\": \"/path/to/key\",\n" +
+        "    \"PrivateKeyPassphrase\": \"passphrase\"\n" +
+        "  }\n" +
+        "}[/]"))
     {
-      ""Name"": ""ModName"",
-      ""CurseForgeUrl"": ""https://www.curseforge.com/minecraft/mc-mods/mod-slug"",
-      ""ProjectId"": 12345
-    }
-  ],
-  ""Ssh"": {
-    ""Host"": ""example.com"",
-    ""Port"": 22,
-    ""Username"": ""user"",
-    ""Password"": ""password"",
-    ""PrivateKeyPath"": ""/path/to/key"",
-    ""PrivateKeyPassphrase"": ""passphrase""
-  }
-}");
+        Header = new PanelHeader("[bold]Example config.json structure[/]"),
+        Border = BoxBorder.Rounded
+    };
+    AnsiConsole.Write(examplePanel);
     return 1;
 }
 
@@ -65,13 +78,13 @@ configuration.Bind(config);
 // Validate configuration
 if (string.IsNullOrWhiteSpace(config.CurseForgeApiKey))
 {
-    Console.WriteLine("Error: CurseForgeApiKey is missing in the config file.");
+    AnsiConsole.MarkupLine("[red]Error:[/] CurseForgeApiKey is missing in the config file.");
     return 1;
 }
 
 if (config.Mods == null || config.Mods.Count == 0)
 {
-    Console.WriteLine("Error: No mods configured in the config file.");
+    AnsiConsole.MarkupLine("[red]Error:[/] No mods configured in the config file.");
     return 1;
 }
 
@@ -81,51 +94,68 @@ string connectionType;
 
 if (config.Ssh != null && !string.IsNullOrWhiteSpace(config.Ssh.Host))
 {
-    Console.WriteLine($"Connecting to SSH server: {config.Ssh.Host}:{config.Ssh.Port}");
+    IFileSystemAccess? tempFileSystem = null;
+    string? tempConnectionType = null;
+    Exception? connectionError = null;
     
-    try
+    AnsiConsole.Status()
+        .Spinner(Spinner.Known.Dots)
+        .Start($"[yellow]Connecting to SSH server: {config.Ssh.Host}:{config.Ssh.Port}...[/]", ctx =>
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(config.Ssh.PrivateKeyPath))
+                {
+                    // Use private key authentication
+                    tempFileSystem = new SftpFileSystemAccess(
+                        config.Ssh.Host, 
+                        config.Ssh.Port, 
+                        config.Ssh.Username,
+                        config.Ssh.PrivateKeyPath,
+                        config.Ssh.PrivateKeyPassphrase);
+                    tempConnectionType = "SSH (private key)";
+                }
+                else if (!string.IsNullOrWhiteSpace(config.Ssh.Password))
+                {
+                    // Use password authentication
+                    tempFileSystem = new SftpFileSystemAccess(
+                        config.Ssh.Host, 
+                        config.Ssh.Port, 
+                        config.Ssh.Username,
+                        config.Ssh.Password);
+                    tempConnectionType = "SSH (password)";
+                }
+                else
+                {
+                    throw new InvalidOperationException("SSH configuration requires either Password or PrivateKeyPath.");
+                }
+                
+                ctx.Status("[green]SSH connection established successfully.[/]");
+                Thread.Sleep(500);
+            }
+            catch (Exception ex)
+            {
+                connectionError = ex;
+            }
+        });
+    
+    if (connectionError != null)
     {
-        if (!string.IsNullOrWhiteSpace(config.Ssh.PrivateKeyPath))
-        {
-            // Use private key authentication
-            fileSystem = new SftpFileSystemAccess(
-                config.Ssh.Host, 
-                config.Ssh.Port, 
-                config.Ssh.Username,
-                config.Ssh.PrivateKeyPath,
-                config.Ssh.PrivateKeyPassphrase);
-            connectionType = "SSH (private key)";
-        }
-        else if (!string.IsNullOrWhiteSpace(config.Ssh.Password))
-        {
-            // Use password authentication
-            fileSystem = new SftpFileSystemAccess(
-                config.Ssh.Host, 
-                config.Ssh.Port, 
-                config.Ssh.Username,
-                config.Ssh.Password);
-            connectionType = "SSH (password)";
-        }
-        else
-        {
-            Console.WriteLine("Error: SSH configuration requires either Password or PrivateKeyPath.");
-            return 1;
-        }
-        
-        Console.WriteLine("SSH connection established successfully.");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Error connecting to SSH server: {ex.Message}");
+        AnsiConsole.MarkupLine($"[red]Error connecting to SSH server:[/] {connectionError.Message}");
         return 1;
     }
+    
+    fileSystem = tempFileSystem!;
+    connectionType = tempConnectionType!;
+    
+    AnsiConsole.MarkupLine("[green]✓[/] SSH connection established");
 }
 else
 {
     // Check local mods directory
     if (!Directory.Exists(modsDirectory))
     {
-        Console.WriteLine($"Error: Mods directory not found: {modsDirectory}");
+        AnsiConsole.MarkupLine($"[red]Error:[/] Mods directory not found: [yellow]{modsDirectory}[/]");
         return 1;
     }
     
@@ -133,51 +163,103 @@ else
     connectionType = "Local";
 }
 
-Console.WriteLine($"HytalePM.Console - Mod Version Checker");
-Console.WriteLine($"Configuration: {configFile}");
-Console.WriteLine($"Connection Type: {connectionType}");
-Console.WriteLine($"Mods Directory: {modsDirectory}");
-Console.WriteLine($"Configured Mods: {config.Mods.Count}");
-Console.WriteLine(new string('=', 80));
+// Display header
+AnsiConsole.Clear();
+AnsiConsole.Write(new FigletText("HytalePM").Color(Color.Cyan1));
+AnsiConsole.MarkupLine("[dim]Mod Version Checker for CurseForge[/]");
+AnsiConsole.WriteLine();
+
+var infoTable = new Table()
+    .Border(TableBorder.Rounded)
+    .BorderColor(Color.Grey)
+    .AddColumn(new TableColumn("[bold]Setting[/]").Centered())
+    .AddColumn(new TableColumn("[bold]Value[/]"))
+    .AddRow("[cyan]Configuration[/]", configFile)
+    .AddRow("[cyan]Connection Type[/]", connectionType == "Local" ? "[green]Local[/]" : $"[yellow]{connectionType}[/]")
+    .AddRow("[cyan]Mods Directory[/]", modsDirectory)
+    .AddRow("[cyan]Configured Mods[/]", config.Mods.Count.ToString());
+
+AnsiConsole.Write(infoTable);
+AnsiConsole.WriteLine();
 
 try
 {
     var checker = new ModVersionChecker(config.CurseForgeApiKey, config);
     var results = await checker.CheckModsInDirectory(modsDirectory, fileSystem);
 
-    Console.WriteLine();
-    Console.WriteLine(new string('=', 80));
-    Console.WriteLine("Summary:");
-    Console.WriteLine(new string('=', 80));
+    AnsiConsole.WriteLine();
+    
+    // Create results table
+    var resultsTable = new Table()
+        .Border(TableBorder.Rounded)
+        .BorderColor(Color.Grey)
+        .AddColumn(new TableColumn("[bold]Mod Name[/]").Centered())
+        .AddColumn(new TableColumn("[bold]Status[/]").Centered())
+        .AddColumn(new TableColumn("[bold]Local Version[/]"))
+        .AddColumn(new TableColumn("[bold]Latest Version[/]"));
 
+    foreach (var result in results)
+    {
+        string statusMarkup = result.Status switch
+        {
+            "Up to date" => "[green]✓ Up to date[/]",
+            "Update available" => "[yellow]⚠ Update available[/]",
+            "Not installed" => "[blue]○ Not installed[/]",
+            _ when result.Status.StartsWith("Error") => "[red]✗ Error[/]",
+            _ => result.Status
+        };
+
+        resultsTable.AddRow(
+            result.ModName,
+            statusMarkup,
+            result.LocalFile ?? "[dim]N/A[/]",
+            result.LatestVersion ?? "[dim]N/A[/]"
+        );
+    }
+
+    AnsiConsole.Write(resultsTable);
+    AnsiConsole.WriteLine();
+
+    // Summary panel
     var upToDate = results.Count(r => r.Status == "Up to date");
     var updatesAvailable = results.Count(r => r.Status == "Update available");
     var notInstalled = results.Count(r => r.Status == "Not installed");
     var errors = results.Count(r => r.Status.StartsWith("Error"));
 
-    Console.WriteLine($"Up to date:        {upToDate}");
-    Console.WriteLine($"Updates available: {updatesAvailable}");
-    Console.WriteLine($"Not installed:     {notInstalled}");
-    Console.WriteLine($"Errors:            {errors}");
+    var summaryGrid = new Grid()
+        .AddColumn()
+        .AddColumn()
+        .AddRow($"[green]Up to date:[/] {upToDate}", $"[yellow]Updates available:[/] {updatesAvailable}")
+        .AddRow($"[blue]Not installed:[/] {notInstalled}", $"[red]Errors:[/] {errors}");
+
+    var summaryPanel = new Panel(summaryGrid)
+    {
+        Header = new PanelHeader("[bold]Summary[/]"),
+        Border = BoxBorder.Rounded,
+        BorderStyle = new Style(Color.Cyan1)
+    };
+    
+    AnsiConsole.Write(summaryPanel);
 
     if (updatesAvailable > 0)
     {
-        Console.WriteLine();
-        Console.WriteLine("Mods with updates available:");
-        foreach (var result in results.Where(r => r.Status == "Update available"))
+        AnsiConsole.WriteLine();
+        var updatesPanel = new Panel(
+            string.Join("\n", results.Where(r => r.Status == "Update available")
+                .Select(r => $"[yellow]•[/] [bold]{r.ModName}[/]\n  Latest: [cyan]{r.LatestVersion}[/]\n  Download: [link]{r.DownloadUrl}[/]")))
         {
-            Console.WriteLine($"  - {result.ModName}");
-            Console.WriteLine($"    Latest: {result.LatestVersion}");
-            Console.WriteLine($"    Download: {result.DownloadUrl}");
-        }
+            Header = new PanelHeader("[bold yellow]⚠ Mods with updates available[/]"),
+            Border = BoxBorder.Rounded,
+            BorderStyle = new Style(Color.Yellow)
+        };
+        AnsiConsole.Write(updatesPanel);
     }
 
     return 0;
 }
 catch (Exception ex)
 {
-    Console.WriteLine($"Error: {ex.Message}");
-    Console.WriteLine(ex.StackTrace);
+    AnsiConsole.WriteException(ex);
     return 1;
 }
 finally

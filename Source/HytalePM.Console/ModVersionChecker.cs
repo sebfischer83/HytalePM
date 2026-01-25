@@ -1,5 +1,6 @@
 using CurseForge.APIClient;
 using CurseForge.APIClient.Models.Mods;
+using Spectre.Console;
 
 namespace HytalePM.Console;
 
@@ -18,93 +19,108 @@ public class ModVersionChecker
     {
         var results = new List<ModCheckResult>();
 
-        var jarFiles = await fileSystem.ListJarFilesAsync(modsDirectory);
-        System.Console.WriteLine($"Found {jarFiles.Count} jar files in {modsDirectory}");
-
-        foreach (var mod in _config.Mods)
-        {
-            System.Console.WriteLine($"\nChecking mod: {mod.Name} (Project ID: {mod.ProjectId})");
-            
-            try
+        var jarFiles = await AnsiConsole.Status()
+            .Spinner(Spinner.Known.Dots)
+            .StartAsync($"[yellow]Scanning directory for .jar files...[/]", async ctx =>
             {
-                var modInfo = await _curseForgeClient.GetModAsync(mod.ProjectId);
-                
-                if (modInfo?.Data == null)
-                {
-                    results.Add(new ModCheckResult
-                    {
-                        ModName = mod.Name,
-                        ProjectId = mod.ProjectId,
-                        Status = "Error: Could not fetch mod information from CurseForge"
-                    });
-                    continue;
-                }
+                var files = await fileSystem.ListJarFilesAsync(modsDirectory);
+                ctx.Status($"[green]Found {files.Count} jar files in {modsDirectory}[/]");
+                await Task.Delay(300);
+                return files;
+            });
 
-                var latestFile = modInfo.Data.LatestFiles?.OrderByDescending(f => f.FileDate).FirstOrDefault();
-                
-                if (latestFile == null)
-                {
-                    results.Add(new ModCheckResult
-                    {
-                        ModName = mod.Name,
-                        ProjectId = mod.ProjectId,
-                        Status = "Error: No files found for this mod"
-                    });
-                    continue;
-                }
+        await AnsiConsole.Progress()
+            .AutoClear(false)
+            .Columns(
+                new TaskDescriptionColumn(),
+                new ProgressBarColumn(),
+                new PercentageColumn(),
+                new SpinnerColumn())
+            .StartAsync(async ctx =>
+            {
+                var task = ctx.AddTask("[cyan]Checking mods against CurseForge[/]", maxValue: _config.Mods.Count);
 
-                var localModFile = jarFiles.FirstOrDefault(f => 
-                    fileSystem.GetFileName(f).Contains(mod.Name, StringComparison.OrdinalIgnoreCase));
-
-                var result = new ModCheckResult
+                foreach (var mod in _config.Mods)
                 {
-                    ModName = mod.Name,
-                    ProjectId = mod.ProjectId,
-                    LatestVersion = latestFile.DisplayName ?? latestFile.FileName,
-                    LatestFileDate = latestFile.FileDate,
-                    DownloadUrl = latestFile.DownloadUrl,
-                    LocalFile = localModFile != null ? fileSystem.GetFileName(localModFile) : null
-                };
-
-                if (localModFile != null)
-                {
-                    var localFileName = Path.GetFileNameWithoutExtension(localModFile);
-                    var latestFileName = Path.GetFileNameWithoutExtension(latestFile.FileName);
+                    task.Description = $"[cyan]Checking:[/] {mod.Name}";
                     
-                    if (localFileName.Equals(latestFileName, StringComparison.OrdinalIgnoreCase))
+                    try
                     {
-                        result.Status = "Up to date";
-                    }
-                    else
-                    {
-                        result.Status = "Update available";
-                    }
-                }
-                else
-                {
-                    result.Status = "Not installed";
-                }
+                        var modInfo = await _curseForgeClient.GetModAsync(mod.ProjectId);
+                        
+                        if (modInfo?.Data == null)
+                        {
+                            results.Add(new ModCheckResult
+                            {
+                                ModName = mod.Name,
+                                ProjectId = mod.ProjectId,
+                                Status = "Error: Could not fetch mod information from CurseForge"
+                            });
+                            task.Increment(1);
+                            continue;
+                        }
 
-                results.Add(result);
-                
-                System.Console.WriteLine($"  Status: {result.Status}");
-                System.Console.WriteLine($"  Latest: {result.LatestVersion}");
-                if (result.LocalFile != null)
-                {
-                    System.Console.WriteLine($"  Local:  {result.LocalFile}");
+                        var latestFile = modInfo.Data.LatestFiles?.OrderByDescending(f => f.FileDate).FirstOrDefault();
+                        
+                        if (latestFile == null)
+                        {
+                            results.Add(new ModCheckResult
+                            {
+                                ModName = mod.Name,
+                                ProjectId = mod.ProjectId,
+                                Status = "Error: No files found for this mod"
+                            });
+                            task.Increment(1);
+                            continue;
+                        }
+
+                        var localModFile = jarFiles.FirstOrDefault(f => 
+                            fileSystem.GetFileName(f).Contains(mod.Name, StringComparison.OrdinalIgnoreCase));
+
+                        var result = new ModCheckResult
+                        {
+                            ModName = mod.Name,
+                            ProjectId = mod.ProjectId,
+                            LatestVersion = latestFile.DisplayName ?? latestFile.FileName,
+                            LatestFileDate = latestFile.FileDate,
+                            DownloadUrl = latestFile.DownloadUrl,
+                            LocalFile = localModFile != null ? fileSystem.GetFileName(localModFile) : null
+                        };
+
+                        if (localModFile != null)
+                        {
+                            var localFileName = Path.GetFileNameWithoutExtension(localModFile);
+                            var latestFileName = Path.GetFileNameWithoutExtension(latestFile.FileName);
+                            
+                            if (localFileName.Equals(latestFileName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                result.Status = "Up to date";
+                            }
+                            else
+                            {
+                                result.Status = "Update available";
+                            }
+                        }
+                        else
+                        {
+                            result.Status = "Not installed";
+                        }
+
+                        results.Add(result);
+                    }
+                    catch (Exception ex)
+                    {
+                        results.Add(new ModCheckResult
+                        {
+                            ModName = mod.Name,
+                            ProjectId = mod.ProjectId,
+                            Status = $"Error: {ex.Message}"
+                        });
+                    }
+                    
+                    task.Increment(1);
                 }
-            }
-            catch (Exception ex)
-            {
-                System.Console.WriteLine($"  Error: {ex.Message}");
-                results.Add(new ModCheckResult
-                {
-                    ModName = mod.Name,
-                    ProjectId = mod.ProjectId,
-                    Status = $"Error: {ex.Message}"
-                });
-            }
-        }
+            });
 
         return results;
     }

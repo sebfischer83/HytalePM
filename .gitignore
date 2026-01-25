@@ -1,0 +1,65 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.userprefs
+
+# Build outputs
+bin/
+obj/
+artifacts/
+TestResults/
+*.Backup.tmp
+
+Logs/
+# Rider / IDE
+.idea/
+.vscode/
+*.sln.iml
+
+# NuGet
+*.nupkg
+packages/
+.nuget/
+
+# User secrets
+secrets.json
+**/secrets.json
+
+# Publish
+publish/
+*.publishsettings
+
+# Docker
+docker-compose.override.yml
+docker-compose.*.yml
+
+# macOS
+.DS_Store
+
+# Node
+node_modules/
+
+# Coverage
+coverage/
+coverage.*.xml
+*.lcov
+
+# Logs / env
+*.log
+.env
+.env.*
+
+# Resharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+
+# Misc
+*.db
+*.pid
+
+# Ignore local configuration/backups
+*.local
+*.tmp
+*.temp

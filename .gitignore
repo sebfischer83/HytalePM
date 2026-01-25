@@ -26,6 +26,8 @@ packages/
 # User secrets
 secrets.json
 **/secrets.json
+config.json
+**/config.json
 
 # Publish
 publish/

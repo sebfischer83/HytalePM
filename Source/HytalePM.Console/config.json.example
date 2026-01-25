@@ -1,0 +1,15 @@
+{
+  "CurseForgeApiKey": "your-curseforge-api-key-here",
+  "Mods": [
+    {
+      "Name": "jei",
+      "CurseForgeUrl": "https://www.curseforge.com/minecraft/mc-mods/jei",
+      "ProjectId": 238222
+    },
+    {
+      "Name": "journeymap",
+      "CurseForgeUrl": "https://www.curseforge.com/minecraft/mc-mods/journeymap",
+      "ProjectId": 32274
+    }
+  ]
+}

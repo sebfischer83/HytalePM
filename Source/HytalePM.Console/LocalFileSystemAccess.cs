@@ -38,11 +38,20 @@ public class LocalFileSystemAccess : IFileSystemAccess
             Directory.CreateDirectory(backupDirectory);
         }
 
-        // Create backup filename with timestamp
+        // Create backup filename with timestamp and ensure uniqueness
         var fileName = Path.GetFileName(sourceFile);
         var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
         var backupFileName = $"{Path.GetFileNameWithoutExtension(fileName)}_{timestamp}{Path.GetExtension(fileName)}";
         var backupPath = Path.Combine(backupDirectory, backupFileName);
+        
+        // If file exists, add a counter suffix
+        int counter = 1;
+        while (File.Exists(backupPath))
+        {
+            backupFileName = $"{Path.GetFileNameWithoutExtension(fileName)}_{timestamp}_{counter}{Path.GetExtension(fileName)}";
+            backupPath = Path.Combine(backupDirectory, backupFileName);
+            counter++;
+        }
 
         // Copy file to backup location
         File.Copy(sourceFile, backupPath, overwrite: false);

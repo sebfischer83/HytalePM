@@ -163,18 +163,7 @@ public class ModVersionChecker
                         var localFile = modFiles.FirstOrDefault(f => 
                             fileSystem.GetFileName(f).Contains(mod.ModName, StringComparison.OrdinalIgnoreCase));
 
-                        if (localFile != null)
-                        {
-                            // Create backup
-                            var backupPath = await fileSystem.CreateBackupAsync(localFile, backupDir);
-                            result.BackupPath = backupPath;
-                            result.OldFile = Path.GetFileName(localFile);
-
-                            // Delete old file
-                            File.Delete(localFile);
-                        }
-
-                        // Download new file
+                        // Download new file first
                         if (!string.IsNullOrEmpty(mod.DownloadUrl))
                         {
                             var newFileName = mod.LatestVersion ?? $"{mod.ModName}.jar";
@@ -186,7 +175,25 @@ public class ModVersionChecker
                             }
 
                             var destinationPath = Path.Combine(modsDirectory, newFileName);
-                            await fileSystem.DownloadFileAsync(mod.DownloadUrl, destinationPath);
+                            
+                            // Download to temp location first to ensure success
+                            var tempPath = destinationPath + ".tmp";
+                            await fileSystem.DownloadFileAsync(mod.DownloadUrl, tempPath);
+                            
+                            // Only proceed with backup and replacement if download succeeded
+                            if (localFile != null)
+                            {
+                                // Create backup
+                                var backupPath = await fileSystem.CreateBackupAsync(localFile, backupDir);
+                                result.BackupPath = backupPath;
+                                result.OldFile = Path.GetFileName(localFile);
+
+                                // Delete old file only after successful download
+                                File.Delete(localFile);
+                            }
+                            
+                            // Move temp file to final location
+                            File.Move(tempPath, destinationPath, overwrite: true);
                             
                             result.NewFile = newFileName;
                             result.Success = true;

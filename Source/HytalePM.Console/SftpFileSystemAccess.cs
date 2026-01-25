@@ -46,7 +46,9 @@ public class SftpFileSystemAccess : IFileSystemAccess
 
     public string GetFileName(string path)
     {
-        return Path.GetFileName(path);
+        // Handle both Unix and Windows paths by using the last segment after '/' or '\'
+        var lastSlash = Math.Max(path.LastIndexOf('/'), path.LastIndexOf('\\'));
+        return lastSlash >= 0 ? path.Substring(lastSlash + 1) : path;
     }
 
     public void Dispose()

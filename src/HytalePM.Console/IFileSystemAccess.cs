@@ -21,6 +21,16 @@ public interface IFileSystemAccess : IDisposable
     /// Downloads a file from a URL to the specified path
     /// </summary>
     Task DownloadFileAsync(string url, string destinationPath);
+
+    /// <summary>
+    /// Deletes a file at the specified path
+    /// </summary>
+    Task DeleteFileAsync(string path);
+
+    /// <summary>
+    /// Moves (or renames) a file to the specified path
+    /// </summary>
+    Task MoveFileAsync(string sourcePath, string destinationPath);
     
     /// <summary>
     /// Checks if the file system is local (supports backups and downloads)
